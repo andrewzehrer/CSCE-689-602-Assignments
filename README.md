@@ -16,6 +16,7 @@
 - A2
   - Boolean Sat to Interval Logic: A diagram showing how Boolean Satisfiability can be mapped to Vilain-style Interval Logic
   - POP and GraphPlan: A plan for putting on socks and shoes displayed in Partial-Order Planning and GraphPlan formats
+  - Situation Calculus: A representation of Blocksworld using Frame Axioms and Action Effect Axioms
   - Unification: A Python script that unifies two given S-expressions
   - Vampire: Proving a certain square is safe in Wumpus World using Vampire 
 - Project

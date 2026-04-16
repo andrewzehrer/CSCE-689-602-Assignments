@@ -1,0 +1,45 @@
+== Blocksworld Situation Calculus Example ==
+
+
+Fluents:
+On(x, y, s) → block x is on block y in situation s
+OnTable(x, s) → block x is on the table in situation s
+Holding(x, s) → agent is holding block x
+Clear(x, s) → nothing is on top of x
+
+Actions:
+Pickup(x) — pick up block x from table
+Putdown(x) — put block x on table
+Unstack(x, y) — pick up x from y
+Stack(x, y) — put x onto y
+
+
+-- Action Effect Axioms --
+
+Pick up from table
+Holding(x, do(Pickup(x), s)) ← OnTable(x, s) ∧ Clear(x, s)
+¬OnTable(x, do(Pickup(x), s))
+Clear(x, do(Pickup(x), s))
+
+Put down onto table
+OnTable(x, do(Putdown(x), s))
+¬Holding(x, do(Putdown(x), s))
+
+Unstack from another block
+Holding(x, do(Unstack(x, y), s)) ← On(x, y, s) ∧ Clear(x, s)
+¬On(x, y, do(Unstack(x, y), s))
+Clear(y, do(Unstack(x, y), s))
+
+Stack onto another block
+On(x, y, do(Stack(x, y), s))
+¬Holding(x, do(Stack(x, y), s))
+¬Clear(y, do(Stack(x, y), s))
+
+
+-- Frame Axioms --
+Everything must stay the same unless an action changes it
+
+On(x, y, do(a, s)) ← On(x, y, s) ∧ ¬(a = Unstack(x, y)) ∧ ¬(a = Stack(x, y))
+OnTable(x, do(a, s)) ← OnTable(x, s) ∧ ¬(a = Pickup(x))
+Holding(x, do(a, s)) ← Holding(x, s) ∧ ¬(a = Putdown(x)) ∧ ¬(a = Stack(x, _))
+Clear(x, do(a, s)) ← Clear(x, s) ∧ ¬(a = Stack(_, x)) ∧ ¬(a = Unstack(_, x))
