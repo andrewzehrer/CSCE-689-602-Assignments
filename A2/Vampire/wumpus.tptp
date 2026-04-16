@@ -1,0 +1,29 @@
+fof(adj_sym, axiom, ![X,Y] : (adjacent(X,Y) => adjacent(Y,X))).
+fof(adj_refl, axiom, ![X] : adjacent(X,X)).
+
+fof(breeze_def, axiom, ![X] : (breeze(X) <=> ?[Y] : (adjacent(X,Y) & pit(Y)))).
+fof(stench_def, axiom, ![X] : (stench(X) <=> ?[Y] : (adjacent(X,Y) & wumpus(Y)))).
+fof(safe_def, axiom, ![X] : (safe(X) <=> (~pit(X) & ~wumpus(X)))).
+
+fof(adj1, axiom, adjacent(c11,c12)).
+fof(adj2, axiom, adjacent(c12,c22)).
+fof(adj3, axiom, adjacent(c11,c21)).
+fof(adj4, axiom, adjacent(c21,c22)).
+fof(adj5, axiom, adjacent(c12,c13)).
+fof(adj6, axiom, adjacent(c22,c23)).
+fof(adj7, axiom, adjacent(c13,c23)).
+fof(adj8, axiom, adjacent(c21,c31)).
+fof(adj9, axiom, adjacent(c22,c32)).
+fof(adj10, axiom, adjacent(c31,c32)).
+fof(adj11, axiom, adjacent(c32,c33)).
+fof(adj12, axiom, adjacent(c23,c33)).
+
+fof(no_breeze, axiom, ~breeze(c22)).
+fof(no_stench, axiom, ~stench(c22)).
+
+fof(pit_fact1, axiom, pit(c31)).
+fof(pit_fact2, axiom, pit(c33)).
+fof(wum_fact, axiom, wumpus(c13)).
+
+fof(goal, conjecture, safe(c22)).
+
