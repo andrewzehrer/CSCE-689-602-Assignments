@@ -1,0 +1,9 @@
+(type_of pikachu electric)
+(type_of venusaur grass)
+(type_of charizard fire)
+(type_of blastoise water)
+
+(implies (and (type_of ?X water) (type_of ?Y fire)) (wins ?X ?Y))
+(implies (and (type_of ?X grass) (type_of ?Y water)) (wins ?X ?Y))
+(implies (and (type_of ?X fire) (type_of ?Y grass)) (wins ?X ?Y))
+(implies (and (type_of ?X electric) (type_of ?Y water)) (wins ?X ?Y))
