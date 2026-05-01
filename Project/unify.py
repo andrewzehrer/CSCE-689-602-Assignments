@@ -171,51 +171,86 @@ def unify_var(var, x, subst):
 # proving
 # ----------------------------
 
-def prove(goal, kb, subst, trace=False, depth=0):
-    goal_str = to_string(substitute(goal, subst))
-    trace_print(trace, depth, f"prove: {goal_str}")
+goal_cache = {}
 
-    results = []
+def goal_key(goal, subst):
+    g = substitute(goal, subst)
+    return to_string(g)
+
+def index_kb(kb):
+    facts = {}
+    rules = {}
 
     for item in kb:
         if item[0] == "fact":
-            fact = item[1]
-            fact2 = substitute(fact, subst)
-            goal2 = substitute(goal, subst)
-
-            new_subst = unify(goal2, fact2, subst.copy())
-
-            if new_subst is not None:
-                trace_print(trace, depth, f"  matched fact: {to_string(fact)}")
-                results.append(new_subst)
+            pred = item[1][0]
+            facts.setdefault(pred, []).append(item[1])
 
         elif item[0] == "rule":
             body, head = item[1], item[2]
+            pred = head[0]
+            rules.setdefault(pred, []).append((body, head))
+
+    return facts, rules
+
+def prove(goal, kb_index, subst, trace=False, depth=0):
+    facts, rules = kb_index
+
+    goal2 = substitute(goal, subst)
+    key = to_string(goal2)
+
+    # ----------------------------
+    # memoization (prevents repetition explosion)
+    # ----------------------------
+    if key in goal_cache:
+        return goal_cache[key]
+
+    trace_print(trace, depth, f"prove: {key}")
+
+    results = []
+
+    # ----------------------------
+    # fact matching
+    # ----------------------------
+    if isinstance(goal2, list):
+        pred = goal2[0]
+
+        for fact in facts.get(pred, []):
+            new_subst = unify(goal2, fact, subst.copy())
+            if new_subst is not None:
+                trace_print(trace, depth, f"  fact: {to_string(fact)}")
+                results.append(new_subst)
+
+    # ----------------------------
+    # rule matching
+    # ----------------------------
+    if isinstance(goal2, list):
+        pred = goal2[0]
+
+        for body, head in rules.get(pred, []):
 
             mapping = {}
-
             body = standardize_apart(body, mapping)
             head = standardize_apart(head, mapping)
 
-            goal2 = substitute(goal, subst)
             head2 = substitute(head, subst)
-
             new_subst = unify(goal2, head2, subst.copy())
 
             if new_subst is not None:
                 trace_print(trace, depth, f"  rule: {to_string(head)}")
-                res = prove_body(body, kb, new_subst, trace, depth + 1)
+                res = prove_body(body, kb_index, new_subst, trace, depth + 1)
                 results.extend(res)
 
+    goal_cache[key] = results
     return results
 
-def prove_body(body, kb, subst, trace=False, depth=0):
+def prove_body(body, kb_index, subst, trace=False, depth=0):
     if isinstance(body, list) and body[0] == "and":
-        return prove_and(body[1:], kb, [subst], trace, depth)
+        return prove_and(body[1:], kb_index, [subst], trace, depth)
     else:
-        return prove(body, kb, subst, trace, depth)
+        return prove(body, kb_index, subst, trace, depth)
 
-def prove_and(goals, kb, states, trace, depth):
+def prove_and(goals, kb_index, states, trace, depth):
     if not goals:
         return states
 
@@ -223,10 +258,10 @@ def prove_and(goals, kb, states, trace, depth):
     new_states = []
 
     for s in states:
-        results = prove(first, kb, s, trace, depth + 1)
-        new_states.extend(results)
+        res = prove(first, kb_index, s, trace, depth + 1)
+        new_states.extend(res)
 
-    return prove_and(rest, kb, new_states, trace, depth)
+    return prove_and(rest, kb_index, new_states, trace, depth)
     
 def fully_resolve(var, subst):
     while is_var(var) and var in subst:
@@ -291,13 +326,15 @@ def print_results(results, query):
 
 def main():
     kb = parse_kb_file("knowledge.txt")
-    print_kb(kb)
-    print()
+    kb_index = index_kb(kb)
 
-    query = parse_expr("(father michael ?X)")
+    # print_kb(kb)
+    # print()
+
+    query = parse_expr("(grandfather ?X george)")
     print("query:", to_string(query), "\n")
 
-    results = prove(query, kb, {}, True)
+    results = prove(query, kb_index, {}, True)
     print_results(results, query)
 
 if __name__ == "__main__":
