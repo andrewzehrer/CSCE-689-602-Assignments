@@ -62,19 +62,38 @@ def parse_kb_file(filename):
 
     return kb
 
+def index_kb(kb):
+    facts = {}
+    rules = {}
+
+    for item in kb:
+        if item[0] == "fact":
+            pred = item[1][0]
+            facts.setdefault(pred, []).append(item[1])
+
+        elif item[0] == "rule":
+            body, head = item[1], item[2]
+            pred = head[0]
+            rules.setdefault(pred, []).append((body, head))
+
+    return facts, rules
+
 # ----------------------------
 # utilities
 # ----------------------------
+
+def to_string(x):
+    if is_list(x):
+        return "(" + " ".join(to_string(e) for e in x) + ")"
+    
+    else:
+        return x
 
 def is_var(x):
     return isinstance(x, str) and x.startswith("?")
 
 def is_list(x):
     return isinstance(x, list)
-
-# ----------------------------
-# substitution
-# ----------------------------
 
 def substitute(x, subst):
     # recursively apply substitutions
@@ -85,10 +104,6 @@ def substitute(x, subst):
         return [substitute(e, subst) for e in x]
 
     return x
-
-# ----------------------------
-# check occurrence
-# ----------------------------
 
 def occurs(var, x, subst):
     x = substitute(x, subst)
@@ -153,7 +168,6 @@ def unify(x, y, subst):
 
     return None
 
-
 def unify_var(var, x, subst):
     if var in subst:
         return unify(subst[var], x, subst)
@@ -173,75 +187,57 @@ def unify_var(var, x, subst):
 
 goal_cache = {}
 
-def goal_key(goal, subst):
-    g = substitute(goal, subst)
-    return to_string(g)
-
-def index_kb(kb):
-    facts = {}
-    rules = {}
-
-    for item in kb:
-        if item[0] == "fact":
-            pred = item[1][0]
-            facts.setdefault(pred, []).append(item[1])
-
-        elif item[0] == "rule":
-            body, head = item[1], item[2]
-            pred = head[0]
-            rules.setdefault(pred, []).append((body, head))
-
-    return facts, rules
-
 def prove(goal, kb_index, subst, trace=False, depth=0):
     facts, rules = kb_index
 
-    goal2 = substitute(goal, subst)
-    key = to_string(goal2)
+    goal = substitute(goal, subst)
+    key = to_string(goal)
 
-    # ----------------------------
     # memoization (prevents repetition explosion)
-    # ----------------------------
     if key in goal_cache:
         return goal_cache[key]
 
     trace_print(trace, depth, f"prove: {key}")
 
+    # equality
+    if isinstance(goal, list) and goal[0] == "=":
+        x, y = goal[1], goal[2]
+        new_subst = unify(x, y, subst.copy())
+        return [new_subst] if new_subst is not None else []
+
+    # inequality
+    if isinstance(goal, list) and goal[0] == "not":
+        inner = goal[1]
+        if isinstance(inner, list) and inner[0] == "=":
+            x, y = inner[1], inner[2]
+            new_subst = unify(x, y, subst.copy())
+            return [] if new_subst is not None else [subst]
+
     results = []
 
-    # ----------------------------
-    # fact matching
-    # ----------------------------
-    if isinstance(goal2, list):
-        pred = goal2[0]
+    if not isinstance(goal, list):
+        return []
 
-        for fact in facts.get(pred, []):
-            new_subst = unify(goal2, fact, subst.copy())
-            if new_subst is not None:
-                trace_print(trace, depth, f"  fact: {to_string(fact)}")
-                results.append(new_subst)
+    pred = goal[0]
 
-    # ----------------------------
-    # rule matching
-    # ----------------------------
-    if isinstance(goal2, list):
-        pred = goal2[0]
+    # facts
+    for fact in facts.get(pred, []):
+        new_subst = unify(goal, fact, subst.copy())
+        if new_subst is not None:
+            trace_print(trace, depth, f"  fact: {to_string(fact)}")
+            results.append(new_subst)
 
-        for body, head in rules.get(pred, []):
+    # rules
+    for body, head in rules.get(pred, []):
+        mapping = {}
+        body2 = standardize_apart(body, mapping)
+        head2 = standardize_apart(head, mapping)
 
-            mapping = {}
-            body = standardize_apart(body, mapping)
-            head = standardize_apart(head, mapping)
+        new_subst = unify(goal, head2, subst.copy())
+        if new_subst is not None:
+            trace_print(trace, depth, f"  rule: {to_string(head)}")
+            results.extend(prove_body(body2, kb_index, new_subst))
 
-            head2 = substitute(head, subst)
-            new_subst = unify(goal2, head2, subst.copy())
-
-            if new_subst is not None:
-                trace_print(trace, depth, f"  rule: {to_string(head)}")
-                res = prove_body(body, kb_index, new_subst, trace, depth + 1)
-                results.extend(res)
-
-    goal_cache[key] = results
     return results
 
 def prove_body(body, kb_index, subst, trace=False, depth=0):
@@ -258,26 +254,23 @@ def prove_and(goals, kb_index, states, trace, depth):
     new_states = []
 
     for s in states:
-        res = prove(first, kb_index, s, trace, depth + 1)
-        new_states.extend(res)
+        subgoal = substitute(first, s)
+        results = prove(subgoal, kb_index, s, trace, depth+1)
+        new_states.extend(results)
 
     return prove_and(rest, kb_index, new_states, trace, depth)
-    
-def fully_resolve(var, subst):
-    while is_var(var) and var in subst:
-        var = subst[var]
-    return var
+
+def normalize_solution(res, query_vars):
+    out = {}
+    for var in query_vars:
+        if var in res:
+            val = fully_resolve(res[var], res)
+            out[var] = to_string(val)
+    return tuple(sorted(out.items()))
     
 # ----------------------------
 # printing
 # ----------------------------
-
-def to_string(x):
-    if is_list(x):
-        return "(" + " ".join(to_string(e) for e in x) + ")"
-    
-    else:
-        return x
 
 def trace_print(trace, depth, msg):
     if trace:
@@ -292,6 +285,11 @@ def get_vars(expr):
             out.extend(get_vars(e))
         return out
     return []
+
+def fully_resolve(var, subst):
+    while is_var(var) and var in subst:
+        var = subst[var]
+    return var
 
 def print_kb(kb):
     print("facts:")
@@ -320,22 +318,63 @@ def print_results(results, query):
                 val = fully_resolve(res[var], res)
                 print(f"  {var} = {to_string(val)}")
 
+def print_query_results(results, query):
+    query_vars = list(set(get_vars(query)))
+
+    seen = set()
+    found = False
+
+    for res in results:
+        norm = normalize_solution(res, query_vars)
+
+        if norm in seen:
+            continue
+        seen.add(norm)
+
+        found = True
+        for var, val in norm:
+            print(f"{var} = {val}")
+        print()
+
+    if not found:
+        print("no solutions\n")
+
 # ----------------------------
 # main
 # ----------------------------
+
+def repl(kb_index):
+    print("Enter queries in S-expression form. Type 'exit' to quit.\n")
+
+    while True:
+        try:
+            line = input("> ").strip()
+
+            if not line:
+                continue
+
+            if line.lower() in ["exit", "quit"]:
+                break
+
+            query = parse_expr(line)
+
+            # clear cache per query
+            global goal_cache
+            goal_cache = {}
+
+            results = prove(query, kb_index, {}, trace=False)
+
+            print_query_results(results, query)
+
+        except Exception as e:
+            print("error:", e, "\n")
 
 def main():
     kb = parse_kb_file("knowledge.txt")
     kb_index = index_kb(kb)
 
-    # print_kb(kb)
-    # print()
-
-    query = parse_expr("(grandfather ?X george)")
-    print("query:", to_string(query), "\n")
-
-    results = prove(query, kb_index, {}, True)
-    print_results(results, query)
+    print("KB loaded.")
+    repl(kb_index)
 
 if __name__ == "__main__":
     main()
