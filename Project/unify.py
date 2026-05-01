@@ -36,7 +36,6 @@ def parse(tokens):
 def parse_expr(s):
     return parse(tokenize(s))
 
-
 # read and parse a knowledge base file
 def parse_kb_file(filename):
     with open(filename, "r") as f:
@@ -63,7 +62,6 @@ def parse_kb_file(filename):
 
     return kb
 
-
 # ----------------------------
 # utilities
 # ----------------------------
@@ -73,7 +71,6 @@ def is_var(x):
 
 def is_list(x):
     return isinstance(x, list)
-
 
 # ----------------------------
 # substitution
@@ -89,7 +86,6 @@ def substitute(x, subst):
 
     return x
 
-
 # ----------------------------
 # check occurrence
 # ----------------------------
@@ -104,6 +100,28 @@ def occurs(var, x, subst):
     
     return False
 
+# ----------------------------
+# standardization
+# ----------------------------
+
+counter = 0
+
+def standardize_apart(expr, mapping=None):
+    global counter
+    if mapping is None:
+        mapping = {}
+
+    if is_var(expr):
+        if expr not in mapping:
+            counter += 1
+            mapping[expr] = f"?{expr[1:]}_{counter}"
+        return mapping[expr]
+
+    elif is_list(expr):
+        return [standardize_apart(e, mapping) for e in expr]
+
+    else:
+        return expr
 
 # ----------------------------
 # unification
@@ -149,46 +167,72 @@ def unify_var(var, x, subst):
     subst[var] = x
     return subst
 
-
 # ----------------------------
 # proving
 # ----------------------------
 
-def prove(goal, kb, subst):
+def prove(goal, kb, subst, trace=False, depth=0):
+    goal_str = to_string(substitute(goal, subst))
+    trace_print(trace, depth, f"prove: {goal_str}")
+
     results = []
 
     for item in kb:
         if item[0] == "fact":
             fact = item[1]
-            new_subst = unify(goal, fact, subst.copy())
+            fact2 = substitute(fact, subst)
+            goal2 = substitute(goal, subst)
+
+            new_subst = unify(goal2, fact2, subst.copy())
+
             if new_subst is not None:
+                trace_print(trace, depth, f"  matched fact: {to_string(fact)}")
                 results.append(new_subst)
 
         elif item[0] == "rule":
             body, head = item[1], item[2]
 
-            new_subst = unify(goal, head, subst.copy())
+            mapping = {}
+
+            body = standardize_apart(body, mapping)
+            head = standardize_apart(head, mapping)
+
+            goal2 = substitute(goal, subst)
+            head2 = substitute(head, subst)
+
+            new_subst = unify(goal2, head2, subst.copy())
+
             if new_subst is not None:
-                results.extend(prove_body(body, kb, new_subst))
+                trace_print(trace, depth, f"  rule: {to_string(head)}")
+                res = prove_body(body, kb, new_subst, trace, depth + 1)
+                results.extend(res)
 
     return results
 
-
-def prove_body(body, kb, subst):
-    # handle (and ...)
+def prove_body(body, kb, subst, trace=False, depth=0):
     if isinstance(body, list) and body[0] == "and":
-        results = [subst]
-        for subgoal in body[1:]:
-            new_results = []
-            for s in results:
-                sub_results = prove(subgoal, kb, s)
-                new_results.extend(sub_results)
-            results = new_results
-        return results
+        return prove_and(body[1:], kb, [subst], trace, depth)
     else:
-        return prove(body, kb, subst)
-    
+        return prove(body, kb, subst, trace, depth)
 
+def prove_and(goals, kb, states, trace, depth):
+    if not goals:
+        return states
+
+    first, *rest = goals
+    new_states = []
+
+    for s in states:
+        results = prove(first, kb, s, trace, depth + 1)
+        new_states.extend(results)
+
+    return prove_and(rest, kb, new_states, trace, depth)
+    
+def fully_resolve(var, subst):
+    while is_var(var) and var in subst:
+        var = subst[var]
+    return var
+    
 # ----------------------------
 # printing
 # ----------------------------
@@ -200,6 +244,19 @@ def to_string(x):
     else:
         return x
 
+def trace_print(trace, depth, msg):
+    if trace:
+        print("  " * depth + msg)
+
+def get_vars(expr):
+    if is_var(expr):
+        return [expr]
+    elif is_list(expr):
+        out = []
+        for e in expr:
+            out.extend(get_vars(e))
+        return out
+    return []
 
 def print_kb(kb):
     print("facts:")
@@ -213,18 +270,20 @@ def print_kb(kb):
             body, head = item[1], item[2]
             print(" ", f"{to_string(head)} :- {to_string(body)}") # prolog-style output
 
-
-def print_results(results):
+def print_results(results, query):
     if not results:
         print("no solutions")
         return
 
+    query_vars = get_vars(query)
+
     for res in results:
         print("solution:")
-        for var in res:
-            val = to_string(substitute(res[var], res))
-            print(f"  {var} = {val}")
 
+        for var in query_vars:
+            if var in res:
+                val = fully_resolve(res[var], res)
+                print(f"  {var} = {to_string(val)}")
 
 # ----------------------------
 # main
@@ -235,12 +294,11 @@ def main():
     print_kb(kb)
     print()
 
-    query = parse_expr("(wins ?X blastoise)")
+    query = parse_expr("(father michael ?X)")
     print("query:", to_string(query), "\n")
 
-    results = prove(query, kb, {})
-    print_results(results)
-
+    results = prove(query, kb, {}, True)
+    print_results(results, query)
 
 if __name__ == "__main__":
     main()
