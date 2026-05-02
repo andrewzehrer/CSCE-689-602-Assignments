@@ -20,4 +20,4 @@
   - Unification: A Python script that unifies two given S-expressions
   - Vampire: Proving a certain square is safe in Wumpus World using Vampire 
 - Project
-  - My final project will expand on the Unification problem from A2. I will be creating my own backchaining theorem prover using first-order logic, complete with a simple interface that can read user input (knowledge base and queries) and show variable bindings as output.
+  - My final project is my own mini-Prolog: a backchaining theorem prover using first-order logic, complete with a simple interface that can read user input (knowledge base and queries) and show unified solutions and variable bindings as output.
