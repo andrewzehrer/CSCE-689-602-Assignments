@@ -24,6 +24,17 @@
 (parent lindsey tobias)
 (parent steve gob)
 
+(spouse george lucille)
+(spouse lucille george)
+(spouse tobias lindsey)
+(spouse lindsey tobias)
+
+(brother oscar george)
+(brother george oscar)
+
+(implies (and (male ?Y) (spouse ?X ?Y)) (husband ?X ?Y))
+(implies (and (female ?Y) (spouse ?X ?Y)) (wife ?X ?Y))
+
 (implies (and (male ?Y) (parent ?X ?Y)) (father ?X ?Y))
 (implies (and (female ?Y) (parent ?X ?Y)) (mother ?X ?Y))
 
@@ -40,6 +51,10 @@
 
 (implies (and (parent ?X ?Z) (brother ?Z ?Y)) (uncle ?X ?Y))
 (implies (and (parent ?X ?Z) (sister ?Z ?Y)) (aunt ?X ?Y))
+(implies (and (parent ?X ?Z) (sibling ?Z ?W) (husband ?W ?Y)) (uncle ?X ?Y))
+(implies (and (parent ?X ?Z) (sibling ?Z ?W) (wife ?W ?Y)) (aunt ?X ?Y))
+
+(implies (and (grandparent ?X ?Z) (grandparent ?Y ?Z) (not (= ?X ?Y))) (cousin ?X ?Y))
 
 (implies (and (parent ?X ?Z) (parent ?Z ?Y)) (grandparent ?X ?Y))
 (implies (and (male ?Y) (grandparent ?X ?Y)) (grandfather ?X ?Y))

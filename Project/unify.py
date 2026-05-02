@@ -191,34 +191,38 @@ def prove(goal, kb_index, subst, trace=False, depth=0):
     facts, rules = kb_index
 
     goal = substitute(goal, subst)
-    key = to_string(goal)
 
-    # memoization (prevents repetition explosion)
-    if key in goal_cache:
-        return goal_cache[key]
+    trace_print(trace, depth, f"prove: {to_string(goal)}")
 
-    trace_print(trace, depth, f"prove: {key}")
+    # logical connectives
+    if isinstance(goal, list):
+        op = goal[0]
 
-    # equality
-    if isinstance(goal, list) and goal[0] == "=":
-        x, y = goal[1], goal[2]
-        new_subst = unify(x, y, subst.copy())
-        return [new_subst] if new_subst is not None else []
+        if op == "and":
+            return prove_and(goal[1:], kb_index, [subst], trace, depth)
 
-    # inequality
-    if isinstance(goal, list) and goal[0] == "not":
-        inner = goal[1]
-        if isinstance(inner, list) and inner[0] == "=":
-            x, y = inner[1], inner[2]
+        if op == "or":
+            results = []
+            for subgoal in goal[1:]:
+                results.extend(prove(subgoal, kb_index, subst.copy(), trace, depth+1))
+            return results
+
+        if op == "not":
+            inner = goal[1]
+            results = prove(inner, kb_index, subst.copy(), trace, depth+1)
+            return [] if results else [subst]
+
+        if op == "=":
+            x, y = goal[1], goal[2]
             new_subst = unify(x, y, subst.copy())
-            return [] if new_subst is not None else [subst]
+            return [new_subst] if new_subst is not None else []
 
-    results = []
-
+    # atomic goals
     if not isinstance(goal, list):
         return []
 
     pred = goal[0]
+    results = []
 
     # facts
     for fact in facts.get(pred, []):
@@ -236,15 +240,9 @@ def prove(goal, kb_index, subst, trace=False, depth=0):
         new_subst = unify(goal, head2, subst.copy())
         if new_subst is not None:
             trace_print(trace, depth, f"  rule: {to_string(head)}")
-            results.extend(prove_body(body2, kb_index, new_subst))
+            results.extend(prove(body2, kb_index, new_subst, trace, depth+1))
 
     return results
-
-def prove_body(body, kb_index, subst, trace=False, depth=0):
-    if isinstance(body, list) and body[0] == "and":
-        return prove_and(body[1:], kb_index, [subst], trace, depth)
-    else:
-        return prove(body, kb_index, subst, trace, depth)
 
 def prove_and(goals, kb_index, states, trace, depth):
     if not goals:
@@ -343,7 +341,7 @@ def print_query_results(results, query):
 # main
 # ----------------------------
 
-def repl(kb_index):
+def repl(kb_index, trace=False):
     print("Enter queries in S-expression form. Type 'exit' to quit.\n")
 
     while True:
@@ -362,19 +360,28 @@ def repl(kb_index):
             global goal_cache
             goal_cache = {}
 
-            results = prove(query, kb_index, {}, trace=False)
+            results = prove(query, kb_index, {}, trace)
 
             print_query_results(results, query)
 
         except Exception as e:
             print("error:", e, "\n")
 
+
 def main():
-    kb = parse_kb_file("knowledge.txt")
+    if len(sys.argv) < 2:
+        print("usage: python unify.py <kb_file> [--trace]")
+        sys.exit(1)
+
+    kb_file = sys.argv[1]
+    trace = "--trace" in sys.argv[2:]
+
+    kb = parse_kb_file(kb_file)
     kb_index = index_kb(kb)
 
-    print("KB loaded.")
-    repl(kb_index)
+    print("kb loaded.")
+    repl(kb_index, trace=trace)
+
 
 if __name__ == "__main__":
     main()
